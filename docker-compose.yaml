@@ -1,0 +1,16 @@
+services:
+  go:
+    build:
+      context: ./src
+      dockerfile: ./Dockerfile
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      go:
+        condition: service_started
+    restart: unless-stopped
