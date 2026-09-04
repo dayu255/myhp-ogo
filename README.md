@@ -23,3 +23,6 @@ const FRAME_COLOR = "#E8A7AC"
 ## 使用ライブラリ
 
 - github.com/fogleman/gg
+- golang.org/x/image/draw
+- golang.org/x/image/font
+- golang.org/x/image/font/opentype
