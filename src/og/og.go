@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/fogleman/gg"
 	"golang.org/x/image/draw"
@@ -13,11 +14,23 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
+// icon.png path  from main.go
+const ICON_PATH = "./assets/icon.png"
+const USER_NAME = "dayu.jp"
+const FRAME_COLOR = "#E8A7AC"
+
 var (
 	boldFace    font.Face
 	regularFace font.Face
 	iconImg     image.Image
 )
+
+var lineStartKinsoku = map[rune]bool{
+	'、': true, '。': true, '，': true, '．': true,
+	'！': true, '？': true, '!': true, '?': true,
+	'）': true, '」': true, '』': true, '】': true, '〉': true, '》': true,
+	'・': true, '：': true, '；': true, ':': true, ';': true,
+}
 
 func loadFontFace(path string, points float64) (font.Face, error) {
 	fontBytes, err := os.ReadFile(path)
@@ -45,7 +58,7 @@ func resizeImage(src image.Image, width, height int) image.Image {
 func init() {
 	var err error
 
-	// 1. フォントの事前読み込み
+	// フォントの読み込み
 	boldFace, err = loadFontFace("./fonts/NotoSansJP-Bold.ttf", 60)
 	if err != nil {
 		log.Fatalf("failed to load bold font: %v", err)
@@ -55,8 +68,8 @@ func init() {
 		log.Fatalf("failed to load regular font: %v", err)
 	}
 
-	// 2. 画像の事前読み込みとリサイズ
-	rawImg, err := gg.LoadImage("./assets/icon.png")
+	// 画像の読み込みとリサイズ(100 * 100)
+	rawImg, err := gg.LoadImage(ICON_PATH)
 	if err != nil {
 		log.Fatalf("failed to load icon: %v", err)
 	}
@@ -81,58 +94,126 @@ func Og(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "image/png")
 	if err := generateOG(w, title, description); err != nil {
-		log.Printf(err.Error())
+		log.Println(err.Error())
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 
-func wrapTextCJK(dc *gg.Context, text string, maxWidth float64) string {
-	var result string
-	var currentLine string
+func wrapTextCJK(dc *gg.Context, text string, maxWidth float64) []string {
+	var lines []string
 
-	// 文字列を1文字(rune)ずつ処理
-	for _, r := range text {
-		testLine := currentLine + string(r)
-		w, _ := dc.MeasureString(testLine)
+	// 既存の改行コードで分割
+	rawParagraphs := strings.Split(text, "\n")
 
-		// 最大幅を超過した場合、手前で改行コードを挿入
-		if w > maxWidth && currentLine != "" {
-			result += currentLine + "\n"
-			currentLine = string(r)
-		} else {
-			currentLine = testLine
+	for _, paragraph := range rawParagraphs {
+		if paragraph == "" {
+			lines = append(lines, "")
+			continue
+		}
+
+		var currentLine []rune
+		runes := []rune(paragraph)
+
+		for i := 0; i < len(runes); i++ {
+			r := runes[i]
+			testLine := string(append(currentLine, r))
+			w, _ := dc.MeasureString(testLine)
+
+			if w > maxWidth && len(currentLine) > 0 {
+				// 次の文字が行頭禁則文字の場合
+				if lineStartKinsoku[r] {
+					currentLine = append(currentLine, r)
+					lines = append(lines, string(currentLine))
+					currentLine = nil
+					continue
+				}
+
+				lines = append(lines, string(currentLine))
+				currentLine = []rune{r}
+			} else {
+				currentLine = append(currentLine, r)
+			}
+		}
+
+		if len(currentLine) > 0 {
+			lines = append(lines, string(currentLine))
 		}
 	}
-	result += currentLine
-	return result
+
+	return lines
 }
+
+func trim(lines []string, maxLines int) []string {
+	if len(lines) <= maxLines {
+		return lines
+	}
+
+	lines = lines[:maxLines]
+	lastLine := lines[maxLines-1]
+	lastLine = lastLine[:len(lastLine)-2] + "..."
+	lines[maxLines-1] = lastLine
+	return lines
+}
+
+const (
+	startX        = 125
+	startY        = 130
+	contentW      = 1000.0
+	lineSpacing   = 1.00 // 行間倍率
+	maxTitleLines = 2
+	maxDescLines  = 3
+)
 
 func generateOG(w http.ResponseWriter, title string, description string) error {
 	dc := gg.NewContext(1200, 630)
 
-	// 背景と枠の描画
-	dc.SetRGB255(232, 167, 172)
+	// 背景と枠
+	dc.SetHexColor(FRAME_COLOR)
 	dc.Clear()
 	dc.DrawRoundedRectangle(50, 50, 1100, 530, 40)
-	dc.SetRGB255(255, 255, 255)
+	dc.SetHexColor("#FFFFFF")
 	dc.Fill()
 
-	// 事前ロード済みの画像を使用
-	dc.DrawImageAnchored(iconImg, 125, 505, 0.5, 0.5)
+	// アイコン
+	dc.DrawImageAnchored(iconImg, startX, 505, 0.5, 0.5)
 
-	// 事前ロード済みのフォントを使用
+	// ユーザー名
+	dc.SetFontFace(regularFace)
+	dc.SetRGB255(80, 80, 80)
+	dc.DrawStringAnchored(USER_NAME, 200, 505, 0.0, 0.5)
+
+	// タイトルの描画行数と高さを計算
 	dc.SetFontFace(boldFace)
-	dc.SetRGB255(51, 51, 51)
-	wrappedTitle := wrapTextCJK(dc, title, 1000)
-	dc.DrawStringWrapped(wrappedTitle, 100, 60, 0.0, 0.0, 1000, 1.0, gg.AlignLeft)
+	titleLines := wrapTextCJK(dc, title, contentW)
+	titleLines = trim(titleLines, maxTitleLines)
+	titleLineHeight := dc.FontHeight() * lineSpacing
+
+	// 説明文の描画行数と高さを計算
+	dc.SetFontFace(regularFace)
+	descLines := wrapTextCJK(dc, description, contentW)
+	descLines = trim(descLines, maxDescLines)
+	descLineHeight := dc.FontHeight() * lineSpacing
+
+	var currentX float64 = startX - 25
+	var currentY float64 = startY
+
+	// タイトルの描画
+	dc.SetFontFace(boldFace)
+	dc.SetRGB255(40, 40, 40)
+	for _, line := range titleLines {
+		dc.DrawStringAnchored(line, currentX, currentY, 0.0, 0.0)
+		currentY += titleLineHeight
+	}
 
 	dc.SetFontFace(regularFace)
-	dc.SetRGB255(100, 100, 100)
-	wrappedDesc := wrapTextCJK(dc, description, 1000)
-	dc.DrawStringWrapped(wrappedDesc, 100, 260, 0.0, 0.0, 1000, 1.0, gg.AlignLeft)
+	dc.SetRGB255(110, 110, 110)
+	for _, line := range descLines {
+		dc.DrawStringAnchored(line, currentX, currentY, 0.0, 0.0)
+		currentY += descLineHeight
+	}
 
-	dc.SetRGB255(51, 51, 51)
-	dc.DrawStringWrapped("dayu.jp", 200, 490, 0.0, 0.5, 1000, 1.5, gg.AlignLeft)
+	log.Println(titleLines)
+	log.Println(descLines)
 
 	return dc.EncodePNG(w)
 }
