@@ -180,7 +180,7 @@ func generateOG(w http.ResponseWriter, title string, description string) error {
 	// ユーザー名
 	dc.SetFontFace(regularFace)
 	dc.SetRGB255(80, 80, 80)
-	dc.DrawStringAnchored(USER_NAME, 200, 505, 0.0, 0.5)
+	dc.DrawStringAnchored(USER_NAME, startX+75, 505, 0.0, 0.25)
 
 	// タイトルの描画行数と高さを計算
 	dc.SetFontFace(boldFace)
