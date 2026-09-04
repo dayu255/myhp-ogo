@@ -19,12 +19,6 @@ const ICON_PATH = "./assets/icon.png"
 const USER_NAME = "dayu.jp"
 const FRAME_COLOR = "#E8A7AC"
 
-var (
-	boldFace    font.Face
-	regularFace font.Face
-	iconImg     image.Image
-)
-
 var lineStartKinsoku = map[rune]bool{
 	'、': true, '。': true, '，': true, '．': true,
 	'！': true, '？': true, '!': true, '?': true,
@@ -32,22 +26,11 @@ var lineStartKinsoku = map[rune]bool{
 	'・': true, '：': true, '；': true, ':': true, ';': true,
 }
 
-func loadFontFace(path string, points float64) (font.Face, error) {
-	fontBytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	f, err := opentype.Parse(fontBytes)
-	if err != nil {
-		return nil, err
-	}
-	face, err := opentype.NewFace(f, &opentype.FaceOptions{
-		Size:    points,
-		DPI:     72,
-		Hinting: font.HintingNone,
-	})
-	return face, nil
-}
+var (
+	boldFont    *opentype.Font
+	regularFont *opentype.Font
+	iconImg     image.Image
+)
 
 func resizeImage(src image.Image, width, height int) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -55,20 +38,25 @@ func resizeImage(src image.Image, width, height int) image.Image {
 	return dst
 }
 
+func loadFont(path string) (*opentype.Font, error) {
+	fontBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return opentype.Parse(fontBytes)
+}
+
 func init() {
 	var err error
-
-	// フォントの読み込み
-	boldFace, err = loadFontFace("./fonts/NotoSansJP-Bold.ttf", 60)
+	boldFont, err = loadFont("./fonts/NotoSansJP-Bold.ttf")
 	if err != nil {
 		log.Fatalf("failed to load bold font: %v", err)
 	}
-	regularFace, err = loadFontFace("./fonts/NotoSansJP-Regular.ttf", 40)
+	regularFont, err = loadFont("./fonts/NotoSansJP-Regular.ttf")
 	if err != nil {
 		log.Fatalf("failed to load regular font: %v", err)
 	}
 
-	// 画像の読み込みとリサイズ(100 * 100)
 	rawImg, err := gg.LoadImage(ICON_PATH)
 	if err != nil {
 		log.Fatalf("failed to load icon: %v", err)
@@ -165,6 +153,7 @@ const (
 )
 
 func generateOG(w http.ResponseWriter, title string, description string) error {
+
 	dc := gg.NewContext(1200, 630)
 
 	// 背景と枠
@@ -176,6 +165,12 @@ func generateOG(w http.ResponseWriter, title string, description string) error {
 
 	// アイコン
 	dc.DrawImageAnchored(iconImg, startX, 505, 0.5, 0.5)
+
+	regularFace, _ := opentype.NewFace(regularFont, &opentype.FaceOptions{Size: 40, DPI: 72, Hinting: font.HintingNone})
+	defer regularFace.Close()
+
+	boldFace, _ := opentype.NewFace(boldFont, &opentype.FaceOptions{Size: 60, DPI: 72, Hinting: font.HintingNone})
+	defer boldFace.Close()
 
 	// ユーザー名
 	dc.SetFontFace(regularFace)
