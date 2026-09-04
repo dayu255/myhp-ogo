@@ -157,7 +157,7 @@ func trim(lines []string, maxLines int) []string {
 
 const (
 	startX        = 125
-	startY        = 130
+	startY        = 135
 	contentW      = 1000.0
 	lineSpacing   = 1.00 // 行間倍率
 	maxTitleLines = 2
