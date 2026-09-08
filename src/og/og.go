@@ -144,27 +144,38 @@ func trim(lines []string, maxLines int) []string {
 }
 
 const (
-	startX        = 125
-	startY        = 135
-	contentW      = 1000.0
-	lineSpacing   = 1.00 // 行間倍率
+	displayW  = 1200
+	displayH  = 630
+	frame     = 40
+	contentW  = displayW - frame*2
+	contentH  = displayH - frame*2
+	startX    = 105 // タイトルが始まる左端のX座標
+	startY    = startX + 25
+	sentenceW = contentW - (startX-frame)*2 + 20
+
+	iconX     = startX - 20
+	iconY     = (displayH - startX) + 25
+	usernameX = iconX + 120
+	usernameY = iconY - 50
+
+	lineSpacing   = 0.95 // 行間倍率
 	maxTitleLines = 2
 	maxDescLines  = 3
 )
 
 func generateOG(w http.ResponseWriter, title string, description string) error {
 
-	dc := gg.NewContext(1200, 630)
+	dc := gg.NewContext(displayW, displayH)
 
 	// 背景と枠
 	dc.SetHexColor(FRAME_COLOR)
 	dc.Clear()
-	dc.DrawRoundedRectangle(50, 50, 1100, 530, 40)
+	dc.DrawRoundedRectangle(frame, frame, contentW, contentH, 40)
 	dc.SetHexColor("#FFFFFF")
 	dc.Fill()
 
 	// アイコン
-	dc.DrawImageAnchored(iconImg, startX, 505, 0.5, 0.5)
+	dc.DrawImageAnchored(iconImg, iconX, iconY, 0.0, 1.0)
 
 	regularFace, _ := opentype.NewFace(regularFont, &opentype.FaceOptions{Size: 40, DPI: 72, Hinting: font.HintingNone})
 	defer regularFace.Close()
@@ -175,17 +186,17 @@ func generateOG(w http.ResponseWriter, title string, description string) error {
 	// ユーザー名
 	dc.SetFontFace(regularFace)
 	dc.SetRGB255(80, 80, 80)
-	dc.DrawStringAnchored(USER_NAME, startX+75, 505, 0.0, 0.25)
+	dc.DrawStringAnchored(USER_NAME, usernameX, usernameY, 0.0, 0.25)
 
 	// タイトルの描画行数と高さを計算
 	dc.SetFontFace(boldFace)
-	titleLines := wrapTextCJK(dc, title, contentW)
+	titleLines := wrapTextCJK(dc, title, sentenceW)
 	titleLines = trim(titleLines, maxTitleLines)
 	titleLineHeight := dc.FontHeight() * lineSpacing
 
 	// 説明文の描画行数と高さを計算
 	dc.SetFontFace(regularFace)
-	descLines := wrapTextCJK(dc, description, contentW)
+	descLines := wrapTextCJK(dc, description, sentenceW)
 	descLines = trim(descLines, maxDescLines)
 	descLineHeight := dc.FontHeight() * lineSpacing
 
@@ -200,6 +211,8 @@ func generateOG(w http.ResponseWriter, title string, description string) error {
 		currentY += titleLineHeight
 	}
 
+	currentY -= 10
+	// 説明分を描画
 	dc.SetFontFace(regularFace)
 	dc.SetRGB255(110, 110, 110)
 	for _, line := range descLines {
